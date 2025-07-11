@@ -17,6 +17,7 @@ export function SubscriptionManager() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [referralCode, setReferralCode] = useState<ReferralCode | null>(null);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -37,13 +38,22 @@ export function SubscriptionManager() {
 
       setProfile(userProfile);
 
+      // Always get referral code (SEAs can still refer others)
+      const { data: code } = await supabase
+        .from('referral_codes')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      setReferralCode(code);
+
       // SEAs don't need subscriptions
       if (userProfile?.role === 'sea') {
         setLoading(false);
         return;
       }
 
-      // Get subscription
+      // Get subscription for non-SEA users
       const { data: sub } = await supabase
         .from('subscriptions')
         .select('*')
@@ -51,13 +61,6 @@ export function SubscriptionManager() {
         .single();
 
       if (sub) {
-        // Get referral code
-        const { data: code } = await supabase
-          .from('referral_codes')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
         // Get current month's credits
         const currentMonth = format(new Date(), 'yyyy-MM-01');
         const { data: credits } = await supabase
@@ -168,17 +171,20 @@ export function SubscriptionManager() {
           </p>
         </div>
         
-        {/* Still show referral code for SEAs in case they want to refer others */}
-        {subscription?.referral_code && (
+        {/* Show referral code for SEAs */}
+        {referralCode && (
           <div className="bg-white shadow rounded-lg p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Your Referral Code</h3>
             <div className="bg-blue-50 rounded-lg p-4">
               <p className="text-3xl font-mono font-bold text-blue-900 text-center mb-2">
-                {subscription.referral_code.code}
+                {referralCode.code}
               </p>
               <p className="text-sm text-blue-700 text-center">
                 Share this code with other educators to give them 60 days free!
               </p>
+            </div>
+            <div className="mt-4 text-sm text-gray-600">
+              <p>Total referrals: {referralCode.uses_count}</p>
             </div>
           </div>
         )}
