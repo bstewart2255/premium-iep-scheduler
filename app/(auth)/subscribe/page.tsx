@@ -8,6 +8,7 @@ import { CheckoutForm } from '@/app/components/payment/checkout-form';
 export default function SubscribePage() {
   const [loading, setLoading] = useState(true);
   const [hasSubscription, setHasSubscription] = useState(false);
+  const [isSEA, setIsSEA] = useState(false);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
@@ -20,6 +21,19 @@ export default function SubscribePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
+        return;
+      }
+
+      // Check user role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role === 'sea') {
+        setIsSEA(true);
+        setLoading(false);
         return;
       }
 
@@ -43,6 +57,27 @@ export default function SubscribePage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-pulse text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (isSEA) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            Welcome, Special Education Assistant!
+          </h1>
+          <p className="text-gray-600 mb-6">
+            Your account is free. No subscription required.
+          </p>
+          <a
+            href="/dashboard"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+          >
+            Go to Dashboard
+          </a>
+        </div>
       </div>
     );
   }

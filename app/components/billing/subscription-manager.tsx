@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { formatPrice, SUBSCRIPTION_CONFIG, isCurrentMonthPauseable } from '@/src/lib/stripe';
 import { format } from 'date-fns';
-import type { Subscription, ReferralCode, ReferralCredit } from '@/src/types/database';
+import type { Subscription, ReferralCode, ReferralCredit, Profile } from '@/src/types/database';
 
 interface SubscriptionData extends Subscription {
   referral_code?: ReferralCode;
@@ -16,6 +16,7 @@ export function SubscriptionManager() {
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -26,6 +27,21 @@ export function SubscriptionManager() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Get user profile
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      setProfile(userProfile);
+
+      // SEAs don't need subscriptions
+      if (userProfile?.role === 'sea') {
+        setLoading(false);
+        return;
+      }
 
       // Get subscription
       const { data: sub } = await supabase
@@ -137,6 +153,37 @@ export function SubscriptionManager() {
 
   if (loading) {
     return <div className="animate-pulse">Loading subscription...</div>;
+  }
+
+  // Special message for SEAs
+  if (profile?.role === 'sea') {
+    return (
+      <div className="space-y-6">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <h3 className="text-lg font-medium text-green-900 mb-2">
+            Free Account - Special Education Assistant
+          </h3>
+          <p className="text-green-700">
+            As a Special Education Assistant, your account is free. You have access to all features needed to support your Resource Specialist.
+          </p>
+        </div>
+        
+        {/* Still show referral code for SEAs in case they want to refer others */}
+        {subscription?.referral_code && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Your Referral Code</h3>
+            <div className="bg-blue-50 rounded-lg p-4">
+              <p className="text-3xl font-mono font-bold text-blue-900 text-center mb-2">
+                {subscription.referral_code.code}
+              </p>
+              <p className="text-sm text-blue-700 text-center">
+                Share this code with other educators to give them 60 days free!
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (!subscription) {

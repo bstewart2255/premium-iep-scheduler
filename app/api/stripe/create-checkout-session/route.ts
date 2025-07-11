@@ -15,6 +15,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user profile to check role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    // SEAs get free accounts
+    if (profile?.role === 'sea') {
+      return NextResponse.json({ 
+        error: 'SEAs have free accounts. No payment required.',
+        isSEA: true 
+      }, { status: 400 });
+    }
+
     // Get request body
     const { referralCode } = await request.json();
 
@@ -35,13 +50,6 @@ export async function POST(request: NextRequest) {
     // Calculate trial end date
     const hasValidReferral = !!referrerId;
     const trialEnd = calculateTrialEndDate(hasValidReferral);
-
-    // Get user profile for metadata
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
 
     // Create or retrieve Stripe customer
     let customerId: string;
