@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getStripe } from '@/src/lib/stripe-client';
 import { formatPrice, SUBSCRIPTION_CONFIG } from '@/src/lib/stripe';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
 
 interface CheckoutFormProps {
   onSuccess?: () => void;
@@ -11,10 +13,40 @@ interface CheckoutFormProps {
 
 export function CheckoutForm({ onSuccess, referralCode: initialCode }: CheckoutFormProps) {
   const [loading, setLoading] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(true);
   const [error, setError] = useState('');
   const [referralCode, setReferralCode] = useState(initialCode || '');
   const [validatingCode, setValidatingCode] = useState(false);
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
+  const supabase = createClientComponentClient();
+  const router = useRouter();
+
+  useEffect(() => {
+    checkUserRole();
+  }, []);
+
+  const checkUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      // If user is SEA, redirect to dashboard
+      if (profile?.role === 'sea') {
+        router.push('/dashboard');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking role:', error);
+    } finally {
+      setCheckingRole(false);
+    }
+  };
 
   const handleCheckout = async () => {
     setLoading(true);
@@ -31,6 +63,12 @@ export function CheckoutForm({ onSuccess, referralCode: initialCode }: CheckoutF
       });
 
       const data = await response.json();
+
+      // Handle SEA response
+      if (data.isSEA) {
+        router.push('/dashboard');
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create checkout session');
@@ -79,6 +117,10 @@ export function CheckoutForm({ onSuccess, referralCode: initialCode }: CheckoutF
     }
   };
 
+  if (checkingRole) {
+    return <div className="animate-pulse">Checking account type...</div>;
+  }
+
   const trialDays = codeValid ? SUBSCRIPTION_CONFIG.extendedTrialPeriodDays : SUBSCRIPTION_CONFIG.trialPeriodDays;
 
   return (
@@ -89,6 +131,9 @@ export function CheckoutForm({ onSuccess, referralCode: initialCode }: CheckoutF
         </h3>
         <p className="text-blue-800">
           {trialDays}-day free trial • {formatPrice(SUBSCRIPTION_CONFIG.monthlyPrice)}/month after trial
+        </p>
+        <p className="text-sm text-blue-700 mt-1">
+          Special Education Assistants (SEAs) have free accounts
         </p>
       </div>
 
